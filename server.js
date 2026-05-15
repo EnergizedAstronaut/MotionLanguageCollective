@@ -38,7 +38,7 @@ app.post('/api/analyze', async (req, res) => {
         parts: [{ text: 'You are a JSON-only API. You must respond with a single raw JSON object and nothing else. No markdown, no backticks, no explanation. Your entire response must start with { and end with }.' }]
       },
       generationConfig: {
-        maxOutputTokens: max_tokens || 1000,
+        maxOutputTokens: max_tokens || 2000,
         temperature: 0.4,
         responseMimeType: 'application/json',
       },
