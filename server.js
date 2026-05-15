@@ -38,10 +38,15 @@ app.post('/api/analyze', async (req, res) => {
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
     );
     const geminiData = await response.json();
+
+    if (geminiData.error) {
+      console.error('Gemini error:', JSON.stringify(geminiData.error));
+      return res.status(502).json({ error: geminiData.error.message });
+    }
 
     // Normalize to Anthropic-style response shape so the frontend stays unchanged
     const text = geminiData?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '{}';
