@@ -346,7 +346,7 @@ export default function App() {
         }] : []),
         {
           type: 'text',
-          text: `${nameHint}Analyze these text message conversations like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals. Return ONLY valid JSON, no markdown, no preamble:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1","Finding 2","Finding 3"],"dominantSignal":"Key behavioral pattern in one short sentence","advice":"One-sentence brutally honest advice"}`,
+          text: `${nameHint}Analyze these text message conversations like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals.\n\nYou MUST respond with ONLY a raw JSON object. No markdown. No backticks. No explanation. No preamble. Start your response with { and end with }. Use exactly these fields:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1 with specific detail","Finding 2 with specific detail","Finding 3 with specific detail"],"dominantSignal":"Key behavioral pattern observed in one short sentence","advice":"One-sentence brutally honest advice"}`,
         },
       ];
 
@@ -364,9 +364,19 @@ export default function App() {
       });
 
       const data = await resp.json();
-      const raw  = data.content?.map(b => b.text || '').join('') || '{}';
-      const clean = raw.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
+      console.log('[MLC] raw API response:', JSON.stringify(data).slice(0, 600));
+      const raw = data.content?.map(b => b.text || '').join('') || '';
+      console.log('[MLC] extracted text:', raw.slice(0, 400));
+
+      if (!raw) throw new Error('Empty response from API');
+
+      // Extract JSON object robustly - handles markdown fences and extra text
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON found: ' + raw.slice(0, 200));
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log('[MLC] parsed:', parsed);
+
+      if (typeof parsed.youScore !== 'number') throw new Error('Bad scores: ' + JSON.stringify(parsed));
 
       clearInterval(ticker);
       setProgress(100);
