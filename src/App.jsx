@@ -42,6 +42,109 @@ function wJ(pose, px, py, angle, flipX, SC) {
   });
 }
 
+
+// ── Cinematic Chat Replay ────────────────────────────────────────────────────
+function CinematicReplay({ messages, yourName, crushName, onDone }) {
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [typingFor, setTypingFor] = useState(null);
+  const [phase, setPhase] = useState('playing');
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (!messages || messages.length === 0) { onDone(); return; }
+    let cancelled = false;
+    const showNext = (idx) => {
+      if (cancelled) return;
+      if (idx >= messages.length) {
+        setTypingFor(null);
+        setPhase('done');
+        setTimeout(() => { if (!cancelled) onDone(); }, 2400);
+        return;
+      }
+      setTypingFor(messages[idx].sender);
+      const typingMs = 550 + Math.min(messages[idx].text.length * 26, 1300);
+      setTimeout(() => {
+        if (cancelled) return;
+        setTypingFor(null);
+        setVisibleCount(idx + 1);
+        setTimeout(() => showNext(idx + 1), 380 + Math.random() * 220);
+      }, typingMs);
+    };
+    const t = setTimeout(() => showNext(0), 600);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [messages]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [visibleCount, typingFor]);
+
+  const youLabel   = (yourName  || 'YOU').toUpperCase();
+  const crushLabel = (crushName || 'CRUSH').toUpperCase();
+
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:35, display:'flex', flexDirection:'column', alignItems:'center', background:C.bg, fontFamily:MONO }}>
+      <div style={{ position:'absolute', inset:0, backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px)', pointerEvents:'none', zIndex:1 }} />
+
+      {/* header */}
+      <div style={{ width:'100%', padding:'11px 20px', borderBottom:'1px solid rgba(255,24,146,0.15)', background:'rgba(1,8,22,0.97)', zIndex:10, display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+        <div style={{ fontFamily:ORBITRON, fontSize:9, color:C.cyan, letterSpacing:'0.2em' }}>MLC · REPLAY DECODING</div>
+        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <span style={{ fontSize:8, color:C.pink, letterSpacing:'0.1em' }}>{youLabel}</span>
+          <span style={{ fontSize:7, color:'rgba(255,199,227,0.25)' }}>vs</span>
+          <span style={{ fontSize:8, color:C.cyan, letterSpacing:'0.1em' }}>{crushLabel}</span>
+        </div>
+      </div>
+
+      {/* messages */}
+      <div ref={scrollRef} style={{ width:'100%', maxWidth:440, flex:1, overflowY:'auto', padding:'14px 18px 80px', display:'flex', flexDirection:'column', gap:10, scrollbarWidth:'none', position:'relative', zIndex:2 }}>
+        {(messages || []).slice(0, visibleCount).map((msg, i) => {
+          const isYou = msg.sender === 'you';
+          return (
+            <div key={i} style={{ display:'flex', flexDirection:'column', alignItems: isYou ? 'flex-end' : 'flex-start', animation:'bubbleIn 0.32s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+              <div style={{ fontSize:7, letterSpacing:'0.14em', color: isYou ? 'rgba(255,24,146,0.5)' : 'rgba(0,212,240,0.5)', marginBottom:3 }}>
+                {isYou ? youLabel : crushLabel}
+              </div>
+              <div style={{ maxWidth:'76%', padding:'9px 13px', background: isYou ? 'rgba(255,24,146,0.11)' : 'rgba(0,212,240,0.09)', border:`1px solid ${isYou ? 'rgba(255,24,146,0.32)' : 'rgba(0,212,240,0.28)'}`, borderRadius: isYou ? '12px 12px 2px 12px' : '12px 12px 12px 2px', fontSize:12, color: isYou ? C.pinkLight : C.cyan, lineHeight:1.5, boxShadow: isYou ? '0 0 10px rgba(255,24,146,0.13)' : '0 0 10px rgba(0,212,240,0.10)' }}>
+                {msg.text}
+              </div>
+            </div>
+          );
+        })}
+
+        {typingFor && (
+          <div style={{ display:'flex', flexDirection:'column', alignItems: typingFor === 'you' ? 'flex-end' : 'flex-start' }}>
+            <div style={{ fontSize:7, letterSpacing:'0.14em', color: typingFor === 'you' ? 'rgba(255,24,146,0.4)' : 'rgba(0,212,240,0.4)', marginBottom:3 }}>
+              {typingFor === 'you' ? youLabel : crushLabel}
+            </div>
+            <div style={{ padding:'10px 16px', background: typingFor === 'you' ? 'rgba(255,24,146,0.07)' : 'rgba(0,212,240,0.06)', border:`1px solid ${typingFor === 'you' ? 'rgba(255,24,146,0.18)' : 'rgba(0,212,240,0.18)'}`, borderRadius: typingFor === 'you' ? '12px 12px 2px 12px' : '12px 12px 12px 2px', display:'flex', gap:5, alignItems:'center' }}>
+              {[0,1,2].map(d => (
+                <div key={d} style={{ width:6, height:6, borderRadius:'50%', background: typingFor === 'you' ? C.pink : C.cyan, animation:`typingDot 1.1s ${d*0.18}s infinite ease-in-out` }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {phase === 'done' && (
+          <div style={{ textAlign:'center', marginTop:20, animation:'bubbleIn 0.5s ease both' }}>
+            <div style={{ fontFamily:ORBITRON, fontSize:10, color:C.pink, letterSpacing:'0.2em', marginBottom:5 }}>PATTERN DECODED</div>
+            <div style={{ fontSize:8, color:'rgba(255,199,227,0.35)', letterSpacing:'0.15em' }}>REVEALING RESULTS...</div>
+          </div>
+        )}
+      </div>
+
+      {/* skip */}
+      <div style={{ position:'absolute', bottom:18, right:18, zIndex:10 }}>
+        <button onClick={onDone} style={{ background:'transparent', border:'1px solid rgba(255,24,146,0.22)', color:'rgba(255,199,227,0.35)', fontFamily:MONO, fontSize:8, letterSpacing:'0.15em', padding:'7px 16px', cursor:'pointer' }} onMouseEnter={e => e.currentTarget.style.borderColor='rgba(255,24,146,0.55)'} onMouseLeave={e => e.currentTarget.style.borderColor='rgba(255,24,146,0.22)'}>SKIP →</button>
+      </div>
+
+      <style>{`
+        @keyframes bubbleIn { from{opacity:0;transform:scale(0.82) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes typingDot { 0%,80%,100%{transform:scale(0.55);opacity:0.35} 40%{transform:scale(1);opacity:1} }
+      `}</style>
+    </div>
+  );
+}
+
 export default function App() {
   const cvRef   = useRef(null);
   const fileRef = useRef(null);
@@ -52,6 +155,8 @@ export default function App() {
   const [progress,   setProgress]   = useState(0);
   const [statusMsg,  setStatusMsg]  = useState('');
   const [result,     setResult]     = useState(null);
+  const [chatReplay,  setChatReplay]  = useState([]);
+  const [replayIdx,   setReplayIdx]   = useState(0);
 
   // ── fonts ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -346,7 +451,7 @@ export default function App() {
         }] : []),
         {
           type: 'text',
-          text: `${nameHint}Analyze these text message conversations like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals.\n\nYou MUST respond with ONLY a raw JSON object. No markdown. No backticks. No explanation. No preamble. Start your response with { and end with }. Use exactly these fields:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1 with specific detail","Finding 2 with specific detail","Finding 3 with specific detail"],"dominantSignal":"Key behavioral pattern observed in one short sentence","advice":"One-sentence brutally honest advice"}`,
+          text: `${nameHint}Analyze these text message conversations like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals.\n\nYou MUST respond with ONLY a raw JSON object. No markdown. No backticks. No explanation. No preamble. Start your response with { and end with }. Use exactly these fields:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1 with specific detail","Finding 2 with specific detail","Finding 3 with specific detail"],"dominantSignal":"Key behavioral pattern observed in one short sentence","advice":"One-sentence brutally honest advice","chatReplay":[{"sender":"you","text":"hey you free tonight?"},{"sender":"crush","text":"maybe why?"},{"sender":"you","text":"wanted to hang"},{"sender":"crush","text":"sure I guess"},{"sender":"you","text":"awesome! 8pm?"},{"sender":"crush","text":"k"}]}. For chatReplay pick 6-8 real revealing exchanges. sender is \"you\" or \"crush\". Max 38 chars each.`,
         },
       ];
 
@@ -397,6 +502,7 @@ export default function App() {
         dominantSignal: 'Insufficient data for a confident conclusion',
         advice: 'Upload screenshots with visible timestamps for a better reading.',
       });
+      setChatReplay([]);
       setScreen('result');
     }
   };
@@ -404,6 +510,7 @@ export default function App() {
   const reset = () => {
     setScreen('landing'); setFiles([]); setResult(null);
     setProgress(0); setYourName(''); setCrushName('');
+    setChatReplay([]); setReplayIdx(0);
   };
 
   // ── shared style helpers ──────────────────────────────────────────────────
@@ -597,6 +704,17 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+
+      {/* ── CINEMATIC CHAT REPLAY ── */}
+      {screen === 'cinematic' && result && (
+        <CinematicReplay
+          messages={chatReplay}
+          yourName={yourName}
+          crushName={crushName}
+          onDone={() => setScreen('result')}
+        />
       )}
 
       {/* ── RESULT ── */}
