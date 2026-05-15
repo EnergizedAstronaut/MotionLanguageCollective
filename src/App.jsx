@@ -275,7 +275,7 @@ export default function App() {
   const onFiles = e => setFiles(Array.from(e.target.files || []).slice(0, 10));
   const onDrop  = e => {
     e.preventDefault();
-    setFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 10));
+    setFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || f.type === 'text/plain' || f.name.endsWith('.txt')).slice(0, 10));
   };
 
   // ── analysis ─────────────────────────────────────────────────────────────
@@ -300,7 +300,32 @@ export default function App() {
     }, 950);
 
     try {
-      const imgs = await Promise.all(files.map(f => new Promise(res => {
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      const textFiles  = files.filter(f => f.type === 'text/plain' || f.name.endsWith('.txt'));
+
+      // Parse WhatsApp txt exports
+      const parseWhatsApp = (raw, yourN, crushN) => {
+        // WhatsApp format: MM/DD/YY, HH:MM - Name: message  OR  [DD/MM/YYYY, HH:MM:SS] Name: message
+        const lines = raw.split('\n').filter(l => l.trim());
+        const messages = [];
+        const msgRegex = /^[\[‎]?(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AP]M)?)\]?\s*[-‎]?\s*([^:]+):\s(.+)$/;
+        for (const line of lines) {
+          const m = line.match(msgRegex);
+          if (m) messages.push({ date: m[1], time: m[2], sender: m[3].trim(), text: m[4].trim() });
+        }
+        if (!messages.length) return raw.slice(0, 8000); // fallback: send raw
+        // Trim to last 120 messages for token efficiency
+        const recent = messages.slice(-120);
+        return recent.map(m => `[${m.date} ${m.time}] ${m.sender}: ${m.text}`).join('\n');
+      };
+
+      let txtContent = '';
+      if (textFiles.length) {
+        const txts = await Promise.all(textFiles.map(f => f.text()));
+        txtContent = txts.map(raw => parseWhatsApp(raw, yourName, crushName)).join('\n\n---\n\n');
+      }
+
+      const imgs = await Promise.all(imageFiles.map(f => new Promise(res => {
         const r = new FileReader();
         r.onload = e => res({
           type: 'image',
@@ -313,6 +338,18 @@ export default function App() {
         ? `The person uploading is called "${yourName || 'the user'}" and their crush is "${crushName || 'the crush'}". `
         : '';
 
+      const contentBlocks = [
+        ...imgs,
+        ...(txtContent ? [{
+          type: 'text',
+          text: `WhatsApp chat export:\n\n${txtContent}`,
+        }] : []),
+        {
+          type: 'text',
+          text: `${nameHint}Analyze these text message conversations like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals. Return ONLY valid JSON, no markdown, no preamble:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1","Finding 2","Finding 3"],"dominantSignal":"Key behavioral pattern in one short sentence","advice":"One-sentence brutally honest advice"}`,
+        },
+      ];
+
       const resp = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -321,13 +358,7 @@ export default function App() {
           max_tokens: 1000,
           messages: [{
             role: 'user',
-            content: [
-              ...imgs,
-              {
-                type: 'text',
-                text: `${nameHint}Analyze these text message screenshots like an FBI forensic analyst. Determine who is more "into" the other person. Examine: visible timestamps for response time gaps, message length and effort, who initiates, emotional warmth, use of questions/interest signals. Return ONLY valid JSON, no markdown, no preamble:\n{"youScore":72,"crushScore":45,"verdict":"YOU ARE MORE INTO THEM","keyFindings":["Finding 1","Finding 2","Finding 3"],"dominantSignal":"Key behavioral pattern in one short sentence","advice":"One-sentence brutally honest advice"}`,
-              },
-            ],
+            content: contentBlocks,
           }],
         }),
       });
@@ -411,7 +442,7 @@ export default function App() {
       <div style={{ position:'absolute', top:10, left:0, right:0, display:'flex', justifyContent:'center', zIndex:40, pointerEvents:'none' }}>
         <div style={{ ...panel, padding:'7px 18px', textAlign:'center' }}>
           <div style={{ fontFamily:ORBITRON, fontSize:10, letterSpacing:'0.22em', color:C.cyan, fontWeight:700 }}>
-            CRUSH · ANALYSIS · DIVISION · v1.0
+            MOTION · LANGUAGE · COLLECTIVE
           </div>
           <div style={{ fontSize:8, letterSpacing:'0.15em', color:C.pink, marginTop:3 }}>
             ◉ BEHAVIORAL PATTERN RECOGNITION ACTIVE
@@ -423,6 +454,7 @@ export default function App() {
       {screen === 'landing' && (
         <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:20 }}>
           <div style={{ textAlign:'center', marginBottom:44 }}>
+            <div style={{ fontSize:8, color:'rgba(0,212,240,0.45)', letterSpacing:'0.28em', marginBottom:10, textTransform:'uppercase' }}>Motion Language Collective</div>
             <h1 style={{ fontFamily:ORBITRON, fontSize:'clamp(18px,4vw,30px)', color:C.pinkLight, letterSpacing:'0.14em', textTransform:'uppercase', lineHeight:1.35, textShadow:`0 0 22px ${C.pink}55`, marginBottom:10 }}>
               WHO'S MORE<br />INTO WHO?
             </h1>
@@ -439,7 +471,7 @@ export default function App() {
             UPLOAD TEXTS
           </button>
           <p style={{ color:'rgba(255,199,227,0.25)', fontSize:8, letterSpacing:'0.14em', marginTop:12 }}>
-            SCREENSHOT YOUR CONVERSATION TO BEGIN
+            SCREENSHOTS OR WHATSAPP EXPORT · BEGIN ANALYSIS
           </p>
         </div>
       )}
@@ -450,7 +482,7 @@ export default function App() {
           <div style={{ ...panel, padding:'22px 26px', width:'100%', maxWidth:460, position:'relative', maxHeight:'90vh', overflowY:'auto' }}>
             <button onClick={() => setScreen('landing')} style={{ position:'absolute', top:12, right:14, background:'none', border:'none', color:'rgba(255,199,227,0.35)', cursor:'pointer', fontSize:17, lineHeight:1 }}>✕</button>
             <div style={{ fontFamily:ORBITRON, fontSize:10, color:C.cyan, letterSpacing:'0.2em', marginBottom:16, borderBottom:`1px solid rgba(0,212,240,0.1)`, paddingBottom:10 }}>
-              EVIDENCE UPLOAD — CLASSIFIED
+              EVIDENCE UPLOAD — MLC CLASSIFIED
             </div>
 
             {/* Steps + phone mock */}
@@ -466,10 +498,10 @@ export default function App() {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {[
-                  ['STEP 1', 'Open your texts with your crush'],
-                  ['STEP 2', 'Hold right on messages to reveal timestamps'],
-                  ['STEP 3', 'Screenshot top to bottom (6 rec, max 10)'],
-                  ['STEP 4', 'Upload them below'],
+                  ['STEP 1', 'Open WhatsApp → Chat → Export Chat (no media) for a .txt file'],
+                  ['STEP 2', 'Or screenshot your texts (hold message to show timestamps)'],
+                  ['STEP 3', 'Screenshot top to bottom (6 rec, max 10 images)'],
+                  ['STEP 4', 'Upload .txt export or image screenshots below'],
                 ].map(([s, d]) => (
                   <div key={s}>
                     <div style={{ fontFamily:ORBITRON, fontSize:12, color:C.pink, marginBottom:1 }}>{s}</div>
@@ -500,12 +532,12 @@ export default function App() {
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,24,146,0.07)'}
               onMouseLeave={e => e.currentTarget.style.background = files.length ? 'rgba(255,24,146,0.05)' : 'transparent'}
             >
-              <input ref={fileRef} type="file" multiple accept="image/*" onChange={onFiles} style={{ display:'none' }} />
+              <input ref={fileRef} type="file" multiple accept="image/*,.txt,text/plain" onChange={onFiles} style={{ display:'none' }} />
               {files.length === 0 ? (
                 <>
                   <div style={{ fontSize:22, color:'rgba(255,24,146,0.35)', marginBottom:5 }}>⊕</div>
-                  <div style={{ fontSize:9, color:'rgba(255,199,227,0.45)', letterSpacing:'0.12em' }}>TAP TO UPLOAD SCREENSHOTS</div>
-                  <div style={{ fontSize:8, color:'rgba(255,199,227,0.22)', marginTop:3, letterSpacing:'0.08em' }}>MAX 10 FILES · IMAGES ONLY</div>
+                  <div style={{ fontSize:9, color:'rgba(255,199,227,0.45)', letterSpacing:'0.12em' }}>TAP TO UPLOAD SCREENSHOTS OR WHATSAPP .TXT</div>
+                  <div style={{ fontSize:8, color:'rgba(255,199,227,0.22)', marginTop:3, letterSpacing:'0.08em' }}>MAX 10 FILES · IMAGES OR WHATSAPP EXPORT</div>
                 </>
               ) : (
                 <>
@@ -535,7 +567,7 @@ export default function App() {
               </button>
             </div>
             <p style={{ textAlign:'center', fontSize:8, color:'rgba(255,199,227,0.2)', letterSpacing:'0.1em' }}>
-              YOUR CONVERSATIONS ARE NEVER STORED ♡
+              MOTION LANGUAGE COLLECTIVE · CONVERSATIONS NEVER STORED ♡
             </p>
           </div>
         </div>
@@ -562,7 +594,7 @@ export default function App() {
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:30, padding:20 }}>
           <div style={{ ...panel, padding:'22px 26px', width:'100%', maxWidth:460, maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ fontFamily:ORBITRON, fontSize:9, color:C.cyan, letterSpacing:'0.2em', marginBottom:4 }}>
-              ANALYSIS COMPLETE · CLASSIFIED
+              MLC · ANALYSIS COMPLETE · CLASSIFIED
             </div>
 
             <div style={{ fontFamily:ORBITRON, fontSize:'clamp(13px,2.8vw,18px)', color:C.pinkLight, letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center', padding:'14px 0', borderTop:`1px solid rgba(255,24,146,0.12)`, borderBottom:`1px solid rgba(255,24,146,0.12)`, marginBottom:18, textShadow:`0 0 16px ${C.pink}55`, lineHeight:1.4 }}>
@@ -637,7 +669,7 @@ export default function App() {
             </div>
 
             <p style={{ textAlign:'center', marginTop:10, fontSize:7.5, color:'rgba(255,199,227,0.18)', letterSpacing:'0.1em' }}>
-              FOR ENTERTAINMENT ONLY · CONVERSATIONS NOT STORED ♡
+              MOTION LANGUAGE COLLECTIVE · CONVERSATIONS NOT STORED ♡
             </p>
           </div>
         </div>
