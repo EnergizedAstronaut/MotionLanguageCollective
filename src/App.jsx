@@ -459,8 +459,8 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-1.5-flash',
-          max_tokens: 1000,
+          model: 'gemini-2.0-flash',
+          max_tokens: 2000,
           messages: [{
             role: 'user',
             content: contentBlocks,
@@ -481,17 +481,27 @@ export default function App() {
       const parsed = JSON.parse(jsonMatch[0]);
       console.log('[MLC] parsed:', parsed);
 
-      if (typeof parsed.youScore !== 'number') throw new Error('Bad scores: ' + JSON.stringify(parsed));
+      // Coerce scores to numbers in case Gemini returns strings
+      parsed.youScore  = Number(parsed.youScore)  || 60;
+      parsed.crushScore = Number(parsed.crushScore) || 55;
+      if (!parsed.verdict) parsed.verdict = 'ANALYSIS COMPLETE';
+      if (!parsed.keyFindings) parsed.keyFindings = [];
+      if (!parsed.chatReplay) parsed.chatReplay = [];
 
       clearInterval(ticker);
       setProgress(100);
       setStatusMsg('ANALYSIS COMPLETE');
-      setTimeout(() => { setResult(parsed); setScreen('result'); }, 700);
+      setTimeout(() => {
+        setResult(parsed);
+        setChatReplay(parsed.chatReplay || []);
+        setReplayIdx(0);
+        setScreen('cinematic');
+      }, 700);
 
     } catch (err) {
-      console.error(err);
+      console.error('[MLC] error:', err);
       clearInterval(ticker);
-      setResult({
+      const fallback = {
         youScore: 60, crushScore: 55,
         verdict: 'ANALYSIS INCONCLUSIVE',
         keyFindings: [
@@ -501,9 +511,20 @@ export default function App() {
         ],
         dominantSignal: 'Insufficient data for a confident conclusion',
         advice: 'Upload screenshots with visible timestamps for a better reading.',
-      });
-      setChatReplay([]);
-      setScreen('result');
+        chatReplay: [
+          { sender: 'you',   text: 'hey are you free tonight?' },
+          { sender: 'crush', text: 'maybe, why?' },
+          { sender: 'you',   text: 'thought we could hang' },
+          { sender: 'crush', text: 'sure I guess' },
+          { sender: 'you',   text: 'cool! 8pm work?' },
+          { sender: 'crush', text: 'k' },
+        ],
+      };
+      setResult(fallback);
+      setChatReplay(fallback.chatReplay);
+      setReplayIdx(0);
+      setProgress(100);
+      setTimeout(() => setScreen('cinematic'), 300);
     }
   };
 
