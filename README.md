@@ -1,4 +1,4 @@
-# Crush Calculator
+# Motion Language Collective
 
 Forensic text message analysis powered by Claude AI.
 
@@ -7,7 +7,7 @@ Forensic text message analysis powered by Claude AI.
 ```bash
 npm install
 # create a .env file with:
-# ANTHROPIC_API_KEY=sk-ant-...
+# GEMINI_API_KEY=your-gemini-key-here
 npm run dev        # starts Vite dev server on :5173
 node server.js     # starts Express proxy on :3000
 ```
